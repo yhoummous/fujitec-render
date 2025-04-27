@@ -7,5 +7,5 @@ services:
     startCommand: "python run.py"
     envVars:
       - key: API_TOKEN
-        value: YOUR_TELEGRAM_API_TOKEN
+        value: 7639520248:AAH97edBBz_SeUU-PX6xEJ25Zd0rtP9ZA8w
     region: singapore
