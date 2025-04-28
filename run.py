@@ -18,13 +18,13 @@ logger = logging.getLogger(__name__)
 app = Flask(__name__)
 
 # === Bot Configuration ===
-API_TOKEN = os.getenv("API_TOKEN")  # Get Telegram Bot API Token from Render environment
+API_TOKEN = os.getenv("API_TOKEN")  # Your Telegram Bot Token from environment
 bot = telebot.TeleBot(API_TOKEN)
 
 # === Webhook Routes ===
 @app.route('/')
 def home():
-    return "🚀 Fujitec Barcode Bot is alive!"
+    return "🚀 Fujitec Barcode Bot is Alive!"
 
 @app.route('/webhook', methods=['POST'])
 def webhook():
@@ -40,19 +40,17 @@ def send_welcome(message):
         logo_path = "logo.png"
         with open(logo_path, 'rb') as logo:
             bot.send_photo(message.chat.id, logo, caption="👋 <b>Welcome to Fujitec Barcode Bot!</b>\n\n"
-                                                           "🔹 Easily create professional barcode stickers for your spare parts.\n\n"
-                                                           "<b>📄 Manual Entry:</b>\n"
-                                                           "Send text like:\n"
+                                                           "🔹 Create professional barcode stickers.\n\n"
+                                                           "<b>📄 Manual Entry Example:</b>\n"
                                                            "<code>123456789012, Motor Gear, R12</code>\n"
                                                            "<code>987654321098, Brake Unit, R34</code>\n\n"
-                                                           "✅ After sending, the bot will generate and send you a ready-to-print PDF.\n\n"
-                                                           "⚡ Let's get started!\n\n"
-                                                           "For Support Call @BDM_IT", parse_mode="HTML")
+                                                           "✅ Let's get started!\n\n"
+                                                           "For support contact @BDM_IT", parse_mode="HTML")
     except Exception as e:
         logger.error(f"Error sending welcome message: {e}")
-        bot.reply_to(message, "❌ Error: Could not send the welcome message with logo.")
+        bot.reply_to(message, "❌ Error: Couldn't send welcome message with logo.")
 
-# === Handle Manual Entry ===
+# === Handle Text for Barcode Generation ===
 @bot.message_handler(func=lambda message: True)
 def handle_text(message):
     try:
@@ -61,7 +59,7 @@ def handle_text(message):
         for line in lines:
             parts = [p.strip() for p in line.split(',')]
             if len(parts) != 3:
-                bot.reply_to(message, "❌ Use format: Barcode, Part Name, Rack")
+                bot.reply_to(message, "❌ Format should be: Barcode, Part Name, Rack")
                 return
             data.append(parts)
 
@@ -79,7 +77,7 @@ def handle_text(message):
         logger.error(f"Manual entry error: {e}")
         bot.reply_to(message, f"❌ Error: {e}")
 
-# === Generate PDF with Barcode, QR, and Part Name ===
+# === Generate PDF with Barcode, QR, and Text ===
 def generate_pdf(labels_data):
     barcode_numbers = [item[0] for item in labels_data]
     pdf_file_name = ",".join(barcode_numbers) + "_labels.pdf"
@@ -128,12 +126,14 @@ def generate_pdf(labels_data):
     c.save()
     return pdf_file_name
 
-# === Run Flask App Only (Webhook will handle bot updates) ===
+# === Start Server and Set Webhook ===
 if __name__ == "__main__":
-    webhook_url = f"https://{os.getenv('RENDER_EXTERNAL_HOSTNAME')}/webhook"
-    if webhook_url:
-        bot.remove_webhook()
-        bot.set_webhook(url=webhook_url)
+    # Hardcoded Render service name:
+    service_name = "fujitec-render"
+    webhook_url = f"https://{service_name}.onrender.com/webhook"
 
-    port = int(os.environ.get('PORT', 4000))  # Render provides PORT env variable
+    bot.remove_webhook()
+    bot.set_webhook(url=webhook_url)
+
+    port = int(os.environ.get('PORT', 4000))
     app.run(host="0.0.0.0", port=port)
