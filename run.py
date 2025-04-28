@@ -110,8 +110,75 @@ def generate_pdf(labels_data):
         c.drawImage(qr_path, cm + 3*cm, y - 3*cm, 3*cm, 3*cm)
         y -= 3*cm + space
 
+       from reportlab.lib.utils import simpleSplit  # add this at the top
+
+def generate_pdf(labels_data):
+    # Name output PDF by the barcode numbers
+    barcode_numbers = [item[0] for item in labels_data]
+    pdf_file_name = ",".join(barcode_numbers) + "_labels.pdf"
+
+    # Set PDF dimensions
+    width, height = 10 * cm, 15 * cm
+    c = canvas.Canvas(pdf_file_name, pagesize=portrait((width, height)))
+
+    for barcode_number, part_name, rack in labels_data:
+        # Barcode Image
+        barcode_filename = f"{barcode_number}_barcode.png"
+        barcode = Code128(barcode_number, writer=ImageWriter())
+        barcode.save(barcode_filename[:-4])  # save without .png
+
+        # QR Code Image
+        qr_path = f"{barcode_number}_qr.png"
+        qr = qrcode.make(f"{barcode_number} | {part_name} | {rack}")
+        qr.save(qr_path)
+
+        # Border
+        c.setLineWidth(1)
+        c.rect(5, 5, width - 10, height - 10)
+
+        y = height - 1 * cm
+        space = 0.7 * cm
+
+        # Logo
+        if os.path.exists("logo.png"):
+            c.drawImage("logo.png", cm, y - 2*cm, width - 2*cm, 2*cm, preserveAspectRatio=True)
+        y -= 2*cm + space
+
+        # Barcode
+        c.drawImage(barcode_filename, cm, y - 2.5*cm, width - 2*cm, 2.5*cm)
+        y -= 2.5*cm + space
+
+        # QR Code
+        c.drawImage(qr_path, cm + 2*cm, y - 3*cm, 3*cm, 3*cm)
+        y -= 3*cm + space
+
+        # Part Name (wrapped and aligned left)
         c.setFont("Helvetica-Bold", 12)
-        c.drawCentredString(width/2, y, f"Part: {part_name}")
+        text_width = width - 2*cm  # 1cm margin left + 1cm margin right
+        lines = simpleSplit(f"Part: {part_name}", "Helvetica-Bold", 12, text_width)
+        text_start_x = 1 * cm  # start 1 cm from left
+        for line in lines:
+            c.drawString(text_start_x, y, line)
+            y -= 0.7 * cm  # move down for each line
+
+        # Rack (aligned left)
+        c.setFont("Helvetica-Bold", 12)
+        c.drawString(text_start_x, y, f"Rack: {rack}")
+        y -= 1.2 * cm
+
+        # Footer
+        c.setFont("Helvetica-Oblique", 8)
+        c.drawCentredString(width / 2, 1 * cm, "FUJITEC SA - JEDDAH WAREHOUSE")
+
+        c.showPage()
+
+        # Clean up temp files
+        os.remove(barcode_filename)
+        os.remove(qr_path)
+
+    c.save()
+    return pdf_file_name
+
         y -= 1.2 * cm
         c.drawCentredString(width/2, y, f"Rack: {rack}")
 
