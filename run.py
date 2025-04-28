@@ -107,7 +107,7 @@ def generate_pdf(labels_data):
         c.drawImage(barcode_filename, cm, y - 2.5*cm, width - 2*cm, 2.5*cm)
         y -= 2.5*cm + space
 
-        c.drawImage(qr_path, cm + 2.5*cm, y - 3*cm, 3*cm, 3*cm)
+        c.drawImage(qr_path, cm + 3*cm, y - 3*cm, 3*cm, 3*cm)
         y -= 3*cm + space
 
         c.setFont("Helvetica-Bold", 12)
