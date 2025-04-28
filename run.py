@@ -1,13 +1,16 @@
 import os
+import time
 import logging
 import telebot
 import qrcode
 from flask import Flask, request
+from threading import Thread
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import portrait
 from reportlab.lib.units import cm
 from barcode import Code128
 from barcode.writer import ImageWriter
+from reportlab.lib.utils import simpleSplit  # <- This must be here
 
 # === Configure Logging ===
 logging.basicConfig(filename='bot.log', level=logging.DEBUG,
