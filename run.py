@@ -149,7 +149,7 @@ def generate_pdf(labels_data):
         y -= 2.5*cm + space
 
         # QR Code
-        c.drawImage(qr_path, cm + 2*cm, y - 3*cm, 3*cm, 3*cm)
+        c.drawImage(qr_path, cm + 2.5*cm, y - 3*cm, 3*cm, 3*cm)
         y -= 3*cm + space
 
         # Part Name (wrapped and aligned left)
