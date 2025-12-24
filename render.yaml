@@ -7,5 +7,5 @@ services:
     startCommand: "python run.py"
     envVars:
       - key: API_TOKEN
-        value: 7639520248:AAH97edBBz_SeUU-PX6xEJ25Zd0rtP9ZA8w
+        value: 8121284747:AAFHsXNE7L7TKb37sOVSuSyYUFqA1EdsIGA
     region: singapore
