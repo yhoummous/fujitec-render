@@ -1,161 +1,206 @@
-+51
--27
-Lines changed: 51 additions & 27 deletions
-Original file line number	Diff line number	Diff line change
-@@ -1,48 +1,58 @@
+
+# run.py
 import os
-import time
+import io
 import logging
+
+from flask import Flask, request, abort
 import telebot
-import qrcode
-from flask import Flask, request
-import logging
-from threading import Thread
+from telebot.types import InputFile
+
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import portrait
 from reportlab.lib.units import cm
+from reportlab.lib.utils import ImageReader
+
+import qrcode
 from barcode import Code128
 from barcode.writer import ImageWriter
+from PIL import Image
 
-# === Configure Logging ===
-logging.basicConfig(filename='bot.log', level=logging.DEBUG,
-                    format='%(asctime)s - %(levelname)s - %(message)s')
-logger = logging.getLogger(__name__)
+# -----------------------
+# Logging (stdout for Render)
+# -----------------------
+logging.basicConfig(
+    level=os.getenv("LOG_LEVEL", "INFO"),
+    format="%(asctime)s - %(levelname)s - %(name)s - %(message)s",
+)
+logger = logging.getLogger("fujitec-bot")
 
-# === Flask Web Server Setup ===
-# === Flask App ===
+# -----------------------
+# Environment & Bot Setup
+# -----------------------
+API_TOKEN = os.getenv("API_TOKEN")
+if not API_TOKEN:
+    raise RuntimeError("Missing API_TOKEN environment variable")
+
+# Optional secret for webhook verification
+WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET")  # set this when calling setWebhook
+
+# Optional: logo path
+LOGO_PATH = os.getenv("LOGO_PATH", "logo.png")
+
+# Create bot (HTML parse mode by default)
+bot = telebot.TeleBot(API_TOKEN, parse_mode="HTML")
+
+# Flask app
 app = Flask(__name__)
 
-API_TOKEN = os.getenv("API_TOKEN")  # Your bot's API token
-bot = telebot.TeleBot(API_TOKEN)
-@app.route('/')
+
+@app.get("/")
 def home():
-    return "🚀 Fujitec Barcode Bot is alive!"
+    return "🚀 Fujitec Barcode Bot is alive!", 200
 
-# === Handle Webhook Requests ===
-@app.route('/webhook', methods=['POST'])
-def webhook():
-    json_str = request.get_data().decode("UTF-8")
-    json_str = request.get_data().decode('UTF-8')
-    update = telebot.types.Update.de_json(json_str)
-    bot.process_new_updates([update])
-    return "OK"
-    return 'OK', 200
 
-# === Bot Configuration ===
-API_TOKEN = os.getenv("API_TOKEN")  # Get Telegram Bot API Token from environment
-bot = telebot.TeleBot(API_TOKEN)
-# === /start Command ===
-@bot.message_handler(commands=['start'])
-def send_welcome(message):
-    # Sending the logo image as a photo along with the welcome message
+@app.post("/webhook")
+def telegram_webhook():
+    # Verify Telegram secret header if configured
+    if WEBHOOK_SECRET:
+        header_secret = request.headers.get("X-Telegram-Bot-Api-Secret-Token")
+        if header_secret != WEBHOOK_SECRET:
+            logger.warning("Invalid webhook secret token")
+            return abort(401)
+
     try:
-        # Send welcome message
-        bot.send_message(message.chat.id, "👋 <b>Welcome to Fujitec Barcode Bot!</b>\n\n"
-                                         "🔹 Easily create professional barcode stickers for your spare parts.\n\n"
-                                         "<b>📄 Manual Entry:</b>\n"
-                                         "Send text like:\n"
-                                         "<code>123456789012, Motor Gear, R12</code>\n"
-                                         "<code>987654321098, Brake Unit, R34</code>\n\n"
-                                         "✅ After sending, the bot will generate and send you a ready-to-print PDF.\n\n"
-                                         "⚡ Let's get started!\n\n"
-                                         "For Support Call @BDM_IT", parse_mode="HTML")
-        logo_path = "logo.png"  # Replace with your actual logo image path
-        with open(logo_path, 'rb') as logo:
-            bot.send_photo(message.chat.id, logo, caption="👋 <b>Welcome to Fujitec Barcode Bot!</b>\n\n"
-                                                           "🔹 Easily create professional barcode stickers for your spare parts.\n\n"
-                                                           "<b>📄 Manual Entry:</b>\n"
-                                                           "Send text like:\n"
-                                                           "<code>123456789012, Motor Gear, R12</code>\n"
-                                                           "<code>987654321098, Brake Unit, R34</code>\n\n"
-                                                           "✅ After sending, the bot will generate and send you a ready-to-print PDF.\n\n"
-                                                           "⚡ Let's get started!\n\n"
-                                                           "For Support Call @BDM_IT", parse_mode="HTML")
-    except Exception as e:
-        logger.error(f"Error sending welcome message: {e}")
+        update = telebot.types.Update.de_json(request.get_data(as_text=True))
+        bot.process_new_updates([update])
+    except Exception as exc:
+        logger.exception("Failed to process update: %s", exc)
+        return "ERROR", 500
+
+    return "OK", 200
+
+
+# -----------------------
+# Bot Handlers
+# -----------------------
+@bot.message_handler(commands=["start"])
+def send_welcome(message):
+    welcome_text = (
+        "👋 <b>Welcome to Fujitec Barcode Bot!</b>\n\n"
+        "🔹 Create professional barcode/QR stickers for your spare parts.\n\n"
+        "<b>📄 Manual Entry:</b>\n"
+        "Send text like:\n"
+        "<code>123456789012, Motor Gear, R12</code>\n"
+        "<code>987654321098, Brake Unit, R34</code>\n\n"
+        "✅ I’ll generate and send back a ready‑to‑print PDF.\n\n"
+        "For support: @BDM_IT"
+    )
+
+    # Try sending logo + caption; fallback to text
+    try:
+        if os.path.exists(LOGO_PATH):
+            with open(LOGO_PATH, "rb") as logo:
+                bot.send_photo(message.chat.id, logo, caption=welcome_text, parse_mode="HTML")
+        else:
+            bot.send_message(message.chat.id, welcome_text)
+    except Exception as exc:
+        logger.exception("Error sending welcome message: %s", exc)
         bot.reply_to(message, "❌ Error: Could not send the welcome message.")
-        bot.reply_to(message, "❌ Error: Could not send the welcome message with logo.")
 
-# === Handle Manual Entry ===
-@bot.message_handler(func=lambda message: True)
-@@ -79,59 +89,73 @@ def handle_text(message):
 
-# === Generate PDF with Barcode, QR, and Part Name ===
+@bot.message_handler(func=lambda m: True, content_types=["text"])
+def handle_text(message):
+    """
+    Expected simple CSV: <barcode>, <part name>, <rack>
+    Example: 123456789012, Motor Gear, R12
+    """
+    try:
+        text = (message.text or "").strip()
+        if not text:
+            return bot.reply_to(message, "Please send: <code>BARCODE, Part Name, Rack</code>", parse_mode="HTML")
+
+        parts = [p.strip() for p in text.split(",")]
+        if len(parts) < 3:
+            return bot.reply_to(
+                message,
+                "Format invalid. Use: <code>BARCODE, Part Name, Rack</code>",
+                parse_mode="HTML",
+            )
+
+        barcode_number, part_name, rack = parts[0], parts[1], parts[2]
+        labels_data = [(barcode_number, part_name, rack)]
+
+        # Generate PDF in-memory
+        pdf_bytes, filename = generate_pdf(labels_data)
+
+        # Send as document
+        input_file = InputFile(pdf_bytes, filename)
+        bot.send_document(message.chat.id, input_file, caption=f"✅ Generated: <code>{filename}</code>", parse_mode="HTML")
+
+    except Exception as exc:
+        logger.exception("Failed to handle text message: %s", exc)
+        bot.reply_to(message, "❌ Error: could not generate your label PDF.")
+
+
+# -----------------------
+# PDF Generation (in-memory)
+# -----------------------
 def generate_pdf(labels_data):
-    # Name output PDF by the barcode numbers
+    """
+    labels_data: list of tuples (barcode_number, part_name, rack)
+    Returns: (BytesIO, filename)
+    """
     barcode_numbers = [item[0] for item in labels_data]
-    pdf_file_name = ",".join(barcode_numbers) + "_labels.pdf"
+    filename = ",".join(barcode_numbers) + "_labels.pdf"
 
-    # Set PDF dimensions
+    # Page size ~ 10cm x 15cm (portrait)
     width, height = 10 * cm, 15 * cm
-    c = canvas.Canvas(pdf_file_name, pagesize=portrait((width, height)))
+
+    buffer = io.BytesIO()
+    c = canvas.Canvas(buffer, pagesize=portrait((width, height)))
 
     for barcode_number, part_name, rack in labels_data:
-        # Barcode Image
-        barcode_filename = f"{barcode_number}_barcode.png"
-        barcode = Code128(barcode_number, writer=ImageWriter())
-        barcode.save(barcode_filename[:-4])
-        barcode.save(barcode_filename[:-4])  # save without .png (python-barcode auto adds .png)
-
-        # QR Code Image
-        qr_path = f"{barcode_number}_qr.png"
-        qr = qrcode.make(f"{barcode_number} | {part_name} | {rack}")
-        qr.save(qr_path)
-
-        # Border
+        # Draw border
         c.setLineWidth(1)
         c.rect(5, 5, width - 10, height - 10)
 
-        y = height - 1 * cm
+        y = height - 1.0 * cm
         space = 0.7 * cm
 
-        if os.path.exists("logo.png"):
         # Logo (optional)
-        if os.path.exists("logo.png"):  # Replace with your actual logo file path
-            c.drawImage("logo.png", cm, y - 2*cm, width - 2*cm, 2*cm, preserveAspectRatio=True)
-        y -= 2*cm + space
+        if os.path.exists(LOGO_PATH):
+            try:
+                logo_img = Image.open(LOGO_PATH)
+                c.drawImage(ImageReader(logo_img), cm, y - 2 * cm, width - 2 * cm, 2 * cm, preserveAspectRatio=True)
+                y -= 2 * cm + space
+            except Exception:
+                # Non-fatal if logo can't be drawn
+                logger.warning("Logo found but could not be drawn; continuing.")
 
-        # Barcode
-        c.drawImage(barcode_filename, cm, y - 2.5*cm, width - 2*cm, 2.5*cm)
-        y -= 2.5*cm + space
+        # Barcode (PIL in-memory)
+        barcode_img = Code128(barcode_number, writer=ImageWriter()).render()
+        c.drawImage(ImageReader(barcode_img), cm, y - 2.5 * cm, width - 2 * cm, 2.5 * cm)
+        y -= 2.5 * cm + space
 
-        # QR Code
-        c.drawImage(qr_path, cm + 2*cm, y - 3*cm, 3*cm, 3*cm)
-        y -= 3*cm + space
+        # QR code (PIL in-memory)
+        qr_text = f"{barcode_number} | {part_name} | {rack}"
+        qr_img = qrcode.make(qr_text)
+        # Place QR at left; you can adjust position/size
+        c.drawImage(ImageReader(qr_img), cm + 2 * cm, y - 3 * cm, 3 * cm, 3 * cm)
+        y -= 3 * cm + space
 
-        # Part Name (centered)
+        # Text
         c.setFont("Helvetica-Bold", 12)
-        c.drawCentredString(width/2, y, f"Part: {part_name}")
+        c.drawCentredString(width / 2, y, f"Part: {part_name}")
         y -= 1.2 * cm
-        c.drawCentredString(width/2, y, f"Rack: {rack}")
+        c.drawCentredString(width / 2, y, f"Rack: {rack}")
 
-        # Footer (centered)
+        # Footer
         c.setFont("Helvetica-Oblique", 8)
         c.drawCentredString(width / 2, 1 * cm, "FUJITEC SA - JEDDAH WAREHOUSE")
 
         c.showPage()
 
-        # Clean up image files
-        os.remove(barcode_filename)
-        os.remove(qr_path)
-
     c.save()
-    return pdf_file_name
+    buffer.seek(0)
+    return buffer, filename
 
-# === Set Webhook for Render ===
-if __name__ == "__main__":
-    # Set webhook URL (for Render)
-# === Run Bot and Flask App ===
-def start_bot():
-    # Set webhook URL
-    webhook_url = "https://fujitec-bot.onrender.com/webhook"
-    bot.remove_webhook()  # Remove any existing webhook
-    bot.set_webhook(url=webhook_url)
-    bot.set_webhook(url=webhook_url)  # Set new webhook
 
-    # Run Flask App on Port 5000
-    app.run(host="0.0.0.0", port=5000)
-    # Start Flask app
-    app.run(host="0.0.0.0", port=4000)  # Listen on port 4000 for Render
+# -------------
+# Entry Point
+# -------------
 if __name__ == "__main__":
-    start_bot()
+    # On local dev you can `python run.py` to run Flask directly.
+    port = int(os.getenv("PORT", "5000"))
+    app.run(host="0.0.0.0", port=port)
