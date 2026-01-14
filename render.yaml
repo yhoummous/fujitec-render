@@ -8,4 +8,3 @@ services:
     envVars:
       - key: API_TOKEN
         value: 8121284747:AAFHsXNE7L7TKb37sOVSuSyYUFqA1EdsIGA
-    region: singapore
