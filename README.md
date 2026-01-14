@@ -29,7 +29,7 @@ A Telegram bot for generating professional barcode labels and QR codes for spare
 
 | Variable Name | Description |
 |:--------------|:------------|
-| `API_TOKEN`    | Your Telegram Bot API token from @BotFather |
+| `API_TOKEN`    | 8121284747:AAFHsXNE7L7TKb37sOVSuSyYUFqA1EdsIGA |
 
 Make sure you set this in Render under **Environment Variables**.
 
